@@ -7,7 +7,10 @@ use RobThree\Auth\TwoFactorAuth;
 
 session_start();
 
-//TODO Ajouter les couches de sécurité sur les formulaires
+//TODO :
+// - Ajouter les couches de sécurité sur les formulaires
+// - Ajouter "required" dans le html du formulaire
+// - Décommenter le errror_reporting en haut de cette page
 ?>
 
 <!DOCTYPE html>
@@ -64,51 +67,132 @@ session_start();
 
         <?php // On vérifie si le login à bien été envoyé
         if (isset($_POST['Submit'])) {
-
-            // Connection à l'Active Directory
-//            $ldapconn = ldap_connect($ldapserver, $ldapport);
-
-            if (true/*$ldapconn*/) {
+            // On stocke l'adresse IP
+            $adresseIp = getIp();
+            // On stocke le User Agent
+            $userAgent = $_SERVER['HTTP_USER_AGENT'];
+            // On se connecte à l'Active Directory
+            $ldapconn = ldap_connect($ldapserver, $ldapport);
+            // Si la connexion a réussi
+            if ($ldapconn) {
+                // On initialise des check de connexion pour les logs
+                $connected = 0;
+                $ifNewUser = false;
                 // On rentre des options de connection ldap
-//                ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
-//                ldap_set_option($ldapconn, LDAP_OPT_REFERRALS, 0);
-//                ldap_set_option($ldapconn, LDAP_OPT_NETWORK_TIMEOUT, 10);
-
+                ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+                ldap_set_option($ldapconn, LDAP_OPT_REFERRALS, 0);
+                ldap_set_option($ldapconn, LDAP_OPT_NETWORK_TIMEOUT, 10);
                 // On récupère les identifiants
-                $ldapuser = $_POST['username'];
-                $ldappass = $_POST['password'];
+                $ldapuser = htmlspecialchars($_POST['username']);
+                $ldappass = htmlspecialchars($_POST['password']);
+                // On check si l'utilisateur existe en BDD
+                $userReq = $pdo->prepare('SELECT * FROM user WHERE username = ?');
+                $userReq->bindParam(1, $ldapuser);
+                $userReq->execute();
+                $user = $userReq->fetch(PDO::FETCH_ASSOC);
 
-                // Binding to ldap server
-                // On vérifie si le mot de passe et l'identifiant sont bon.
-//                $ldapbind = ldap_bind($ldapconn, $ldapuser, $ldappass);
+                if (!empty ($ldappass)) {
+                    // On vérifie si le mot de passe et l'identifiant sont bons.
+                    $ldapbind = ldap_bind($ldapconn, $ldapuser, $ldappass);
+                }
+                // Si les identifiants sont bons
+                if ($ldapbind) {
+                    // Si la connection est Ok on le renseigne dans le logConnexion
+                    $connected = 1;
+                    // Si l'utilisateur existe dans la BDD
+                    if ($user) {
+                        //TODO :
+                        // - Si le user existe faire une vérification avec l'adresse ip et l'agent via la bdd
+                        // - Si navigateur pas connue envoyer un mail de CONFIRMATION
+                        // - Si IP pas connue alors envoyer un mail de SIGNALEMENT
 
-                // Si les identifiants sont bon
-                if (true/*$ldapbind*/) {
+                        // On récupère l'adresse IP liée à l'utilisateur
+                        $userIpReq = $pdo->prepare('SELECT adresse_ip FROM user_ip WHERE id_user = ?');
+                        $userIpReq->bindParam(1, $user['id']);
+                        $userIpReq->execute();
+                        $userIp = $userIpReq->fetch(PDO::FETCH_ASSOC);
 
-                    // TODO faire une vérification avec l'adresse ip et l'agent via la bdd
-                    // On stocke l'adresse IP
-                    $adresseIp = getIp();
-                    // On stocke le User Agent
-                    $userAgent = $_SERVER['HTTP_USER_AGENT'];
+                        // On vérifie si elle correspond à l'adresse IP habituelle
+                        if ($userIp["adresse_ip"] == $adresseIp) {
 
-                    // On stocke l'utilisateur dans la session
-                    $_SESSION['username'] = $ldapuser;
+                            // On récupère le User Agent lié à l'utilisateur
+                            $userAgentReq = $pdo->prepare('SELECT name FROM user_agent WHERE id_user = ?');
+                            $userAgentReq->bindParam(1, $user['id']);
+                            $userAgentReq->execute();
+                            $userAgentBdd = $userAgentReq->fetch(PDO::FETCH_ASSOC);
+
+                            // On vérifie s'il correspond avec le User Agent habituel
+                            if ($userAgent == $userAgentBdd["name"]) {
+                                // On stocke l'utilisateur dans la session
+                                $_SESSION['username'] = $ldapuser;
+                                $_SESSION['user_id'] = $user['id'];
+
+                            } else {
+                                //TODO :
+                                // - Envoyer un mail de SIGNALEMENT
+                                // - L'utilisateur peut tout de même se connecter
+                            }
+
+                        } else {
+                            //TODO :
+                            // - Envoyer un mail de CONFIRMATION
+                            // - L'utilisateur ne peut pas se connecter
+                        }
+
+                    } else {
+                        $userReq = $pdo->prepare("INSERT INTO user(username) VALUES (?);");
+                        $userReq->bindParam(1, $ldapuser);
+                        $userReq->execute();
+
+                        $userReq = $pdo->prepare('SELECT * FROM user WHERE username = ?');
+                        $userReq->bindParam(1, $ldapuser);
+                        $userReq->execute();
+                        $user = $userReq->fetch(PDO::FETCH_ASSOC);
+
+                        $userReq = $pdo->prepare("INSERT INTO user_ip(adresse_ip, id_user) VALUES (?, ?);");
+                        $userReq->bindParam(1, $adresseIp);
+                        $userReq->bindParam(2, $user['id']);
+                        $userReq->execute();
+
+                        $userReq = $pdo->prepare("INSERT INTO user_agent(name, id_user) VALUES (?, ?);");
+                        $userReq->bindParam(1, $userAgent);
+                        $userReq->bindParam(2, $user['id']);
+                        $userReq->execute();
+
+                        $ifNewUser = true;
+                    }
+
                     //TODO récupérer dans la session les informations de l'utilisateur de la BDD
                     //comme le code secret si il existe.
 
-                    // On rafraîchit la page
-                    header("location:login.php");
+
                 } else { ?>
                     <div class="row">
                         <div class="col s2"></div>
                         <div class="col s8 card-panel red lighten-4" role="alert">
-                            <p class="center-align"><span class="material-icons left">warning_amber</span> l'identifiant
-                                ou
-                                le mot de passe est incorrect.</p>
+                            <p class="center-align">
+                                <span class="material-icons left">warning_amber</span>
+                                L'identifiant ou le mot de passe est incorrect.
+                            </p>
                         </div>
                         <div class="col s2"></div>
                     </div> <?php
                 }
+
+                if ($user || $ifNewUser) {
+                    $user_id = $user['id'];
+                    // On stock dans les logs le id_user, ip, agent, date
+                    $userReq = $pdo->prepare("INSERT INTO logConnexion(id_user, ip, agent, isConnected) VALUES (?, ?, ?, ?);");
+                    $userReq->bindParam(1, $user_id);
+                    $userReq->bindParam(2, $adresseIp);
+                    $userReq->bindParam(3, $userAgent);
+                    $userReq->bindParam(4, $connected);
+                    $userReq->execute();
+                }
+
+                // On rafraîchit la page
+                header("location:login.php");
+
             } else { ?>
                 <div class="row">
                     <div class="col s2"></div>
@@ -139,7 +223,7 @@ session_start();
                 <?php
                 //TODO : Ici si nous avons en session le user et qu'il à déjà un code secret de renseigné nous
                 //TODO : pouvons ne pas faire apparaitre le QR Code puisqu'il est utilisé pour activité l'authentification et enregistrer le code secret en bdd  ?>
-<!--                <p>Code Secret : --><?//= $secret ?><!--</p>-->
+                <!--                <p>Code Secret : --><?//= $secret ?><!--</p>-->
                 <p>QR Code :</p>
                 <img src="<?= $tfa->getQRCodeImageAsDataUri('MSPR', $secret) ?>" alt="QR Code">
                 <form method="POST">
