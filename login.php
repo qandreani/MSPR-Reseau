@@ -97,14 +97,12 @@ session_start();
                 }
                 // Si les identifiants sont bons
                 if ($ldapbind) {
+
                     // Si la connection est Ok on le renseigne dans le logConnexion
                     $connected = 1;
+
                     // Si l'utilisateur existe dans la BDD
                     if ($user) {
-                        //TODO :
-                        // - Si le user existe faire une vérification avec l'adresse ip et l'agent via la bdd
-                        // - Si navigateur pas connue envoyer un mail de CONFIRMATION
-                        // - Si IP pas connue alors envoyer un mail de SIGNALEMENT
 
                         // On récupère l'adresse IP liée à l'utilisateur
                         $userIpReq = $pdo->prepare('SELECT adresse_ip FROM user_ip WHERE id_user = ?');
@@ -123,9 +121,21 @@ session_start();
 
                             // On vérifie s'il correspond avec le User Agent habituel
                             if ($userAgent == $userAgentBdd["name"]) {
+
                                 // On stocke l'utilisateur dans la session
                                 $_SESSION['username'] = $ldapuser;
                                 $_SESSION['user_id'] = $user['id'];
+
+                                // On check si l'utilisateur à la clé secrète pour la double authentification google
+                                $userSecretReq = $pdo->prepare('SELECT secret FROM user WHERE id = ?');
+                                $userSecretReq->bindParam(1, $user['id']);
+                                $userSecretReq->execute();
+                                $userSecret = $userSecretReq->fetch(PDO::FETCH_ASSOC);
+
+                                // Si l'utilisateur à une clé secrète de double authentification google
+                                if ($userSecret != NULL) {
+                                    $_SESSION['tfa_secret'] = $userSecret;
+                                }
 
                             } else {
                                 //TODO :
@@ -140,31 +150,50 @@ session_start();
                         }
 
                     } else {
+                        // On enregistre le login du nouvel utilisateur
                         $userReq = $pdo->prepare("INSERT INTO user(username) VALUES (?);");
                         $userReq->bindParam(1, $ldapuser);
                         $userReq->execute();
 
+                        // On récupère l'id en base du nouvel utilisateur
                         $userReq = $pdo->prepare('SELECT * FROM user WHERE username = ?');
                         $userReq->bindParam(1, $ldapuser);
                         $userReq->execute();
                         $user = $userReq->fetch(PDO::FETCH_ASSOC);
 
+                        // On enregistre le l'adresse IP du nouvel utilisateur en base
                         $userReq = $pdo->prepare("INSERT INTO user_ip(adresse_ip, id_user) VALUES (?, ?);");
                         $userReq->bindParam(1, $adresseIp);
                         $userReq->bindParam(2, $user['id']);
                         $userReq->execute();
 
+                        // On enregistre le User Agent du nouvel utilisateur en base
                         $userReq = $pdo->prepare("INSERT INTO user_agent(name, id_user) VALUES (?, ?);");
                         $userReq->bindParam(1, $userAgent);
                         $userReq->bindParam(2, $user['id']);
                         $userReq->execute();
 
+                        // On stocke le nouvel utilisateur dans la session
+                        $_SESSION['username'] = $ldapuser;
+                        $_SESSION['user_id'] = $user['id'];
+
+                        // On passe la variable pour les logs à True
                         $ifNewUser = true;
                     }
 
-                    //TODO récupérer dans la session les informations de l'utilisateur de la BDD
-                    //comme le code secret si il existe.
+                    if ($user || $ifNewUser) {
+                        $user_id = $user['id'];
+                        // On stocke dans les logs le id_user, ip, agent, date
+                        $userReq = $pdo->prepare("INSERT INTO logConnexion(id_user, ip, agent, isConnected) VALUES (?, ?, ?, ?);");
+                        $userReq->bindParam(1, $user_id);
+                        $userReq->bindParam(2, $adresseIp);
+                        $userReq->bindParam(3, $userAgent);
+                        $userReq->bindParam(4, $connected);
+                        $userReq->execute();
+                    }
 
+                    // On rafraîchit la page
+                    header("location:login.php");
 
                 } else { ?>
                     <div class="row">
@@ -181,7 +210,7 @@ session_start();
 
                 if ($user || $ifNewUser) {
                     $user_id = $user['id'];
-                    // On stock dans les logs le id_user, ip, agent, date
+                    // On stocke dans les logs le id_user, ip, agent, date
                     $userReq = $pdo->prepare("INSERT INTO logConnexion(id_user, ip, agent, isConnected) VALUES (?, ?, ?, ?);");
                     $userReq->bindParam(1, $user_id);
                     $userReq->bindParam(2, $adresseIp);
@@ -189,9 +218,6 @@ session_start();
                     $userReq->bindParam(4, $connected);
                     $userReq->execute();
                 }
-
-                // On rafraîchit la page
-                header("location:login.php");
 
             } else { ?>
                 <div class="row">
@@ -210,36 +236,38 @@ session_start();
         // On instancie la classe de double Authentification
         $tfa = new TwoFactorAuth();
 
+        // S'il n'y a pas de clé secrète dans la session
         if (empty($_SESSION['tfa_secret'])) {
             // Sinon on la génère et on la stocke dans la session
             $_SESSION['tfa_secret'] = $tfa->createSecret();
+            $secret = $_SESSION['tfa_secret']; ?>
+
+            <div class="row">
+                <div class="col s2"></div>
+                <div class="col s8 center-align" role="alert">
+                    <h3>Activation Double Authentification</h3>
+                    <p>Code Secret : <?= $secret ?></p>
+                    <p>QR Code :</p>
+                    <img src="<?= $tfa->getQRCodeImageAsDataUri('MSPR', $secret) ?>" alt="QR Code">
+                    <form method="POST">
+                        <input type="text" placeholder="Vérification Code" name="tfa_code">
+                        <button class="btn waves-light" type="submit">Valider</button>
+                    </form>
+                </div>
+                <div class="csol s2"></div>
+            </div> <?php
+        } else {
+            $secret = $_SESSION['tfa_secret'];
+
         }
-        $secret = $_SESSION['tfa_secret']; ?>
 
-        <div class="row">
-            <div class="col s2"></div>
-            <div class="col s8 center-align" role="alert">
-                <h3>Activation Double Authentification</h3>
-                <?php
-                //TODO : Ici si nous avons en session le user et qu'il à déjà un code secret de renseigné nous
-                //TODO : pouvons ne pas faire apparaitre le QR Code puisqu'il est utilisé pour activité l'authentification et enregistrer le code secret en bdd  ?>
-                <!--                <p>Code Secret : --><?//= $secret ?><!--</p>-->
-                <p>QR Code :</p>
-                <img src="<?= $tfa->getQRCodeImageAsDataUri('MSPR', $secret) ?>" alt="QR Code">
-                <form method="POST">
-                    <input type="text" placeholder="Vérification Code" name="tfa_code">
-                    <button class="btn waves-light" type="submit">Valider</button>
-                </form>
-            </div>
-            <div class="csol s2"></div>
-        </div>
-
-        <?php
-        //TODO Ajouter les couches de sécurité sur les formulaires
+        // Si le code de validation à bien été rentré
         if (!empty($_POST['tfa_code'])) {
+            // On vérifie si le code match avec la clé secrète
             if ($tfa->verifyCode($secret, $_POST['tfa_code'])) {
-                //TODO Ici il nous faut enregistrer le code secret dans la BDD par rapport à l'utilisateur en session et ajouter
-                //TODO une condition pour savoir si ce n'est pas déjà le cas, si il y a déjà un code secret pas besoins de l'enregistrer en bdd
+                //TODO :
+                // Ici il nous faut enregistrer le code secret dans la BDD par rapport à l'utilisateur en session et ajouter
+                // une condition pour savoir si ce n'est pas déjà le cas, si il y a déjà un code secret pas besoins de l'enregistrer en bdd
 //                $q = $db->prepare('UPDATE users SET secret = :secret WHERE id = :id');
 //                $q->bindValue('secret', $secret);
 //                $q->bindValue('id', $_SESSION['user_id']);
@@ -262,8 +290,7 @@ session_start();
                 </div> <?php
             }
         }
-    }
-    ?>
+    } ?>
 </div>
 
 <script type="text/javascript" src="assets/js/materialize.min.js"></script>
