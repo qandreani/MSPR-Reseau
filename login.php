@@ -75,6 +75,7 @@ session_start();
             $ldapconn = ldap_connect($ldapserver, $ldapport);
             // Si la connexion a réussi
             if ($ldapconn) {
+
                 // On initialise des check de connexion pour les logs
                 $connected = 0;
                 $ifNewUser = false;
@@ -90,7 +91,6 @@ session_start();
                 $userReq->bindParam(1, $ldapuser);
                 $userReq->execute();
                 $user = $userReq->fetch(PDO::FETCH_ASSOC);
-
                 if (!empty ($ldappass)) {
                     // On vérifie si le mot de passe et l'identifiant sont bons.
                     $ldapbind = ldap_bind($ldapconn, $ldapuser, $ldappass);
@@ -100,7 +100,6 @@ session_start();
 
                     // Si la connection est Ok on le renseigne dans le logConnexion
                     $connected = 1;
-
                     // Si l'utilisateur existe dans la BDD
                     if ($user) {
 
@@ -109,10 +108,9 @@ session_start();
                         $userIpReq->bindParam(1, $user['id']);
                         $userIpReq->execute();
                         $userIp = $userIpReq->fetch(PDO::FETCH_ASSOC);
-
                         // On vérifie si elle correspond à l'adresse IP habituelle
                         if ($userIp["adresse_ip"] == $adresseIp) {
-
+                            echo "ip";
                             // On récupère le User Agent lié à l'utilisateur
                             $userAgentReq = $pdo->prepare('SELECT name FROM user_agent WHERE id_user = ?');
                             $userAgentReq->bindParam(1, $user['id']);
@@ -121,7 +119,7 @@ session_start();
 
                             // On vérifie s'il correspond avec le User Agent habituel
                             if ($userAgent == $userAgentBdd["name"]) {
-
+                                echo "agent";
                                 // On stocke l'utilisateur dans la session
                                 $_SESSION['username'] = $ldapuser;
                                 $_SESSION['user_id'] = $user['id'];
@@ -131,7 +129,7 @@ session_start();
                                 $userSecretReq->bindParam(1, $user['id']);
                                 $userSecretReq->execute();
                                 $userSecret = $userSecretReq->fetch(PDO::FETCH_ASSOC);
-
+                                echo "test";
                                 // Si l'utilisateur à une clé secrète de double authentification google
                                 if ($userSecret != NULL) {
                                     $_SESSION['tfa_secret'] = $userSecret['secret'];
@@ -150,6 +148,7 @@ session_start();
                         }
 
                     } else {
+                        echo "plz";
                         // On enregistre le login du nouvel utilisateur
                         $userReq = $pdo->prepare("INSERT INTO user(username) VALUES (?);");
                         $userReq->bindParam(1, $ldapuser);
