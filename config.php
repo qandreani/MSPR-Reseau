@@ -33,4 +33,3 @@ $ldapport = '389';
 $ldaptree = "OU=labo,DC=DEV,DC=MSPR";
 //$ldapuser = 'DEV\qandreani';
 //$ldappass = 'azerty2022!';
-
