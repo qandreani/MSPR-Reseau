@@ -134,7 +134,7 @@ session_start();
 
                                 // Si l'utilisateur à une clé secrète de double authentification google
                                 if ($userSecret != NULL) {
-                                    $_SESSION['tfa_secret'] = $userSecret;
+                                    $_SESSION['tfa_secret'] = $userSecret['secret'];
                                 }
 
                             } else {
@@ -238,9 +238,10 @@ session_start();
 
         // S'il n'y a pas de clé secrète dans la session
         if (empty($_SESSION['tfa_secret'])) {
-            // Sinon on la génère et on la stocke dans la session
+
+            // On la génère une clé secrète
             $_SESSION['tfa_secret'] = $tfa->createSecret();
-            $secret = $_SESSION['tfa_secret']; ?>
+            $secret =  $_SESSION['tfa_secret']; ?>
 
             <div class="row">
                 <div class="col s2"></div>
@@ -256,22 +257,41 @@ session_start();
                 </div>
                 <div class="csol s2"></div>
             </div> <?php
-        } else {
-            $secret = $_SESSION['tfa_secret'];
+            $_SESSION['newUser'] = true;
 
+        } else {
+            $secret = $_SESSION['tfa_secret'];?>
+
+            <div class="row">
+                <div class="col s2"></div>
+                <div class="col s8 center-align" role="alert">
+                    <h3>Authentification</h3>
+                    <p>Code Secret : <?= $secret ?></p>
+                    <form method="POST">
+                        <input type="text" placeholder="Vérification Code" name="tfa_code">
+                        <button class="btn waves-light" type="submit">Valider</button>
+                    </form>
+                </div>
+                <div class="csol s2"></div>
+            </div> <?php
         }
 
         // Si le code de validation à bien été rentré
         if (!empty($_POST['tfa_code'])) {
+            // On récupère la clé dans la session
+            $secret = $_SESSION['tfa_secret'];
+
             // On vérifie si le code match avec la clé secrète
             if ($tfa->verifyCode($secret, $_POST['tfa_code'])) {
-                //TODO :
-                // Ici il nous faut enregistrer le code secret dans la BDD par rapport à l'utilisateur en session et ajouter
-                // une condition pour savoir si ce n'est pas déjà le cas, si il y a déjà un code secret pas besoins de l'enregistrer en bdd
-//                $q = $db->prepare('UPDATE users SET secret = :secret WHERE id = :id');
-//                $q->bindValue('secret', $secret);
-//                $q->bindValue('id', $_SESSION['user_id']);
-//                $q->execute();
+
+                // Si c'est un nouvel utilisateur on enregistre la clé secrète
+                if($_SESSION['newUser']) {
+                    // On enregistre le login du nouvel utilisateur
+                    $userReq = $pdo->prepare("UPDATE user SET secret = ? WHERE id = ?;");
+                    $userReq->bindParam(1, $secret);
+                    $userReq->bindParam(2, $_SESSION['user_id']);
+                    $userReq->execute();
+                }
 
                 // On active la session
                 $_SESSION['Active'] = true;

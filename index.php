@@ -6,6 +6,7 @@ if ($_SESSION['Active'] == false) {
     header("location:login.php");
     exit;
 }
+
 //Disable error report for undefined superglobals
 error_reporting( error_reporting() & ~E_NOTICE );
 
@@ -62,7 +63,7 @@ if($_POST) {
         err(403,"XSRF Failure");
 }
 
-$file = 'C:\\Users\\Mathys';
+$file = '/Users/quent/Downloads';
 
 if($_GET['do'] == 'list') {
     if (is_dir($file)) {
@@ -461,6 +462,9 @@ $MAX_UPLOAD_SIZE = min(asBytes(ini_get('post_max_size')), asBytes(ini_get('uploa
 
     </script>
 </head><body>
+<div>
+    <a href="logout.php" class="btn waves-light" type="submit">Déconnexion</a>
+</div>
 <div id="top">
     <?php if($allow_create_folder): ?>
         <form action="?" method="post" id="mkdir" />
