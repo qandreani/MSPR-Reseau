@@ -110,7 +110,6 @@ session_start();
                         $userIp = $userIpReq->fetch(PDO::FETCH_ASSOC);
                         // On vérifie si elle correspond à l'adresse IP habituelle
                         if ($userIp["adresse_ip"] == $adresseIp) {
-                            echo "ip";
                             // On récupère le User Agent lié à l'utilisateur
                             $userAgentReq = $pdo->prepare('SELECT name FROM user_agent WHERE id_user = ?');
                             $userAgentReq->bindParam(1, $user['id']);
@@ -119,7 +118,6 @@ session_start();
 
                             // On vérifie s'il correspond avec le User Agent habituel
                             if ($userAgent == $userAgentBdd["name"]) {
-                                echo "agent";
                                 // On stocke l'utilisateur dans la session
                                 $_SESSION['username'] = $ldapuser;
                                 $_SESSION['user_id'] = $user['id'];
@@ -129,7 +127,6 @@ session_start();
                                 $userSecretReq->bindParam(1, $user['id']);
                                 $userSecretReq->execute();
                                 $userSecret = $userSecretReq->fetch(PDO::FETCH_ASSOC);
-                                echo "test";
                                 // Si l'utilisateur à une clé secrète de double authentification google
                                 if ($userSecret != NULL) {
                                     $_SESSION['tfa_secret'] = $userSecret['secret'];
@@ -148,7 +145,6 @@ session_start();
                         }
 
                     } else {
-                        echo "plz";
                         // On enregistre le login du nouvel utilisateur
                         $userReq = $pdo->prepare("INSERT INTO user(username) VALUES (?);");
                         $userReq->bindParam(1, $ldapuser);
