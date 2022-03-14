@@ -1,16 +1,11 @@
 <?php
-//error_reporting(0);
+error_reporting(0);
 require_once('config.php');
 require_once('functions.php');
 
 use RobThree\Auth\TwoFactorAuth;
 
 session_start();
-
-//TODO :
-// - Ajouter les couches de sécurité sur les formulaires
-// - Ajouter "required" dans le html du formulaire
-// - Décommenter le errror_reporting en haut de cette page
 ?>
 
 <!DOCTYPE html>
@@ -55,7 +50,7 @@ session_start();
                         <div class="col s2"></div>
                         <div class="input-field col s8">
                             <i class="material-icons prefix">account_circle</i>
-                            <input name="username" type="text" id="inputUsername" class="validate">
+                            <input name="username" type="text" id="inputUsername" class="validate" required>
                             <label for="inputUsername">Identifiant</label>
                         </div>
                         <div class="col s2"></div>
@@ -64,7 +59,7 @@ session_start();
                         <div class="col s2"></div>
                         <div class="input-field col s8">
                             <i class="material-icons prefix">password</i>
-                            <input name="password" type="password" id="inputPassword" class="validate">
+                            <input name="password" type="password" id="inputPassword" class="validate" required>
                             <label for="inputPassword">Mot de Passe</label>
                         </div>
                         <div class="col s2"></div>
@@ -155,10 +150,6 @@ session_start();
                                 }
 
                             } else {
-                                //TODO :
-                                // - Envoyer un mail de SIGNALEMENT
-                                // - L'utilisateur peut tout de même se connecter
-
                                 // On stocke le contenu du mail
                                 $message = "Nous constatons une connexion non-habituel sur le portail.";
                                 $message .= " Si c'est vous alors veuillez ne pas tenir compte de ce message.";
